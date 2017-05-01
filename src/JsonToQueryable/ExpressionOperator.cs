@@ -3,12 +3,10 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace JsonToExpression
+namespace JsonToQueryable
 {
-    public class Class1
+    public enum ExpressionOperator
     {
-        public Class1()
-        {
-        }
+
     }
 }

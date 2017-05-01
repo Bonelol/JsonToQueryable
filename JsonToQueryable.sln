@@ -7,10 +7,13 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{708C878D-E3C
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{BB152342-17FE-47C6-A444-0755443122E3}"
 	ProjectSection(SolutionItems) = preProject
+		.gitattributes = .gitattributes
+		.gitignore = .gitignore
 		global.json = global.json
+		LICENSE.txt = LICENSE.txt
 	EndProjectSection
 EndProject
-Project("{8BB2217D-0F2D-49D1-97BC-3654ED321F3B}") = "JsonToExpression", "src\JsonToExpression\JsonToExpression.xproj", "{7DBA4F4D-02C3-43C2-9C49-F2DDFC003734}"
+Project("{8BB2217D-0F2D-49D1-97BC-3654ED321F3B}") = "JsonToQueryable", "src\JsonToQueryable\JsonToQueryable.xproj", "{7DBA4F4D-02C3-43C2-9C49-F2DDFC003734}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
