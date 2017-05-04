@@ -39,10 +39,15 @@ namespace JsonToQueryable
         public IQueryable<T> CreateQuery<T>(DbContext context) where T : class
         {
             var hasIncludeFilter = context.GetService<IQueryCompiler>().GetType().Name == "ReplaceQueryCompiler";
-            var n = ParseNode(_rootType);
+            var obj = ParseJsonString();
             var set = context.Set<T>();
-            var q = CreateQueryWhere(set, n);
-            q = CreateQueryInclude(q, n, hasIncludeFilter);
+            var q = CreateQueryWhere(set, obj.Root);
+            q = CreateQueryInclude(q, obj.Root, hasIncludeFilter);
+
+            if (obj.PageSize > 0)
+            {
+                q = q.Skip(obj.Page * obj.PageSize).Take(obj.PageSize);
+            }
 
             //if (n.Properties.Count <= 0)
             //    return q;
@@ -59,7 +64,7 @@ namespace JsonToQueryable
 
             var temp = queryable;
 
-            foreach (var node in expressionNode.Properties.Values.Where(p=>p.IsReferencedType))
+            foreach (var node in expressionNode.Properties.Values.Where(p => p.IsReferencedType))
             {
                 var exp = node.CreateIncludeExpression(temp, hasIncludeFilter);
                 temp = queryable.Provider.CreateQuery<T>(exp);
@@ -82,7 +87,89 @@ namespace JsonToQueryable
             return queryable.Provider.CreateQuery<T>(exp);
         }
 
-        private ExpressionNode ParseNode(Type type, string  name = null, ExpressionNode parent = null)
+        private QueryableObject ParseJsonString()
+        {
+            var obj = new QueryableObject();
+
+            while (true)
+            {
+                var oper = _parser.Next();
+
+                if (oper.Kind == TokenKind.BRACE_L)
+                {
+
+                }
+                else if (oper.Kind == TokenKind.NAME)
+                {
+                    var name = oper.Value.ToLower();
+
+                    switch (name)
+                    {
+                        case "query":
+                        {
+                            var colon = _parser.Next();
+                            if (colon.Kind == TokenKind.COLON)
+                            {
+                                obj.Root = ParseNode(_rootType);
+                            }
+                            break;
+                        }
+                        case "page":
+                        {
+                            var colon = _parser.Next();
+                            if (colon.Kind == TokenKind.COLON)
+                            {
+                                var page = _parser.Next();
+                                if (page.Kind == TokenKind.INT)
+                                {
+                                    obj.Page = page.Value.ToInt32();
+                                }
+                                else
+                                {
+                                    throw new Exception("Missing page value");
+                                }
+                            }
+                            else
+                            {
+                                throw new Exception("Missing page value");
+                            }
+                            break;
+                        }
+                        case "pagesize":
+                        {
+                            var colon = _parser.Next();
+                            if (colon.Kind == TokenKind.COLON)
+                            {
+                                var pageSize = _parser.Next();
+                                if (pageSize.Kind == TokenKind.INT)
+                                {
+                                    obj.PageSize = pageSize.Value.ToInt32();
+                                }
+                                else
+                                {
+                                    throw new Exception("Missing pageSize value");
+                                }
+                            }
+                            else
+                            {
+                                throw new Exception("Missing pageSize value");
+                            }
+                            break;
+                        }
+                        default:
+                            throw new NotSupportedException();
+                    }
+                }
+                else if (oper.Kind == TokenKind.BRACE_R || oper.Kind == TokenKind.EOF)
+                {
+                    break;
+                }
+            }
+
+            return obj;
+        }
+
+        private ExpressionNode ParseNode(Type type, string name = null, ExpressionNode parent = null)
         {
             var node = new ExpressionNode(type, name, parent);
 
@@ -99,7 +186,7 @@ namespace JsonToQueryable
                     ExpressionNode childNode;
                     var property = oper;
                     var propertyType = node.Type.GetProperty(property.Value).PropertyType;
-                    
+
                     var next = _parser.Next();
 
                     if (next.Kind == TokenKind.COLON)
@@ -124,6 +211,7 @@ namespace JsonToQueryable
                     else
                     {
                         childNode = new ExpressionNode(propertyType, property.Value, node);
+                        _parser.Back();
                     }
 
                     node.Properties.Add(property.Value, childNode);
@@ -150,7 +238,7 @@ namespace JsonToQueryable
                 {
                     break;
                 }
-                
+
                 TokenKind? oo = null;
 
                 //if && ||
@@ -168,60 +256,60 @@ namespace JsonToQueryable
                 switch (operation.Kind)
                 {
                     case TokenKind.LESSTHAN:
+                    {
+                        var compare = LambdaCompare.LessThan;
+                        var n = _parser.Next();
+                        if (n.Kind == TokenKind.EQUALS)
                         {
-                            var compare = LambdaCompare.LessThan;
-                            var n = _parser.Next();
-                            if (n.Kind == TokenKind.EQUALS)
-                            {
-                                n = _parser.Next();
-                                compare = LambdaCompare.LessThanOrEqual;
-                            }
-
-                            var v = n.Value.ToInt32();
-                            temp = CreateLambdaExpression(parameter, property.Value, v, compare);
+                            n = _parser.Next();
+                            compare = LambdaCompare.LessThanOrEqual;
                         }
+
+                        var v = n.Value.ToInt32();
+                        temp = CreateLambdaExpression(parameter, property.Value, v, compare);
+                    }
                         break;
                     case TokenKind.GREATERTHAN:
+                    {
+                        var compare = LambdaCompare.GreaterThan;
+                        var n = _parser.Next();
+                        if (n.Kind == TokenKind.EQUALS)
                         {
-                            var compare = LambdaCompare.GreaterThan;
-                            var n = _parser.Next();
-                            if (n.Kind == TokenKind.EQUALS)
-                            {
-                                n = _parser.Next();
-                                compare = LambdaCompare.GreaterThanOrEqual;
-                            }
-
-                            var v = n.Value.ToInt32();
-                            temp = CreateLambdaExpression(parameter, property.Value, v, compare);
+                            n = _parser.Next();
+                            compare = LambdaCompare.GreaterThanOrEqual;
                         }
+
+                        var v = n.Value.ToInt32();
+                        temp = CreateLambdaExpression(parameter, property.Value, v, compare);
+                    }
                         break;
                     case TokenKind.EQUALS:
-                        {
-                            var n = _parser.Next();
-                            var v = n.Value.ToInt32();
-                            temp = CreateLambdaExpression(parameter, property.Value, v, LambdaCompare.Equal);
-                        }
+                    {
+                        var n = _parser.Next();
+                        var v = n.Value.ToInt32();
+                        temp = CreateLambdaExpression(parameter, property.Value, v, LambdaCompare.Equal);
+                    }
                         break;
                     case TokenKind.INT:
-                        {
-                            var v = operation.Value.ToInt32();
-                            temp = CreateLambdaExpression(parameter, property.Value, v, LambdaCompare.Equal);
-                        }
+                    {
+                        var v = operation.Value.ToInt32();
+                        temp = CreateLambdaExpression(parameter, property.Value, v, LambdaCompare.Equal);
+                    }
                         break;
                     case TokenKind.STRING:
-                        {
-                            var v = operation.Value;
-                            temp = CreateLambdaExpression(parameter, property.Value, v, LambdaCompare.Equal);
-                        }
+                    {
+                        var v = operation.Value;
+                        temp = CreateLambdaExpression(parameter, property.Value, v, LambdaCompare.Equal);
+                    }
                         break;
                     case TokenKind.BOOLEAN:
-                        {
-                            var v = operation.Value.ToBoolean();
-                            temp = CreateLambdaExpression(parameter, property.Value, v, LambdaCompare.Equal);
-                        }
+                    {
+                        var v = operation.Value.ToBoolean();
+                        temp = CreateLambdaExpression(parameter, property.Value, v, LambdaCompare.Equal);
+                    }
                         break;
                     default:
-                        throw new Exception();
+                        throw new NotImplementedException();
                 }
 
                 if (oo != null)

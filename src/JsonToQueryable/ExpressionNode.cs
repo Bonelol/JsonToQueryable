@@ -9,7 +9,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace JsonToQueryable
 {
-    internal class ExpressionNode
+    public class ExpressionNode
     {
         private ExpressionNode Parent { get; }
 
