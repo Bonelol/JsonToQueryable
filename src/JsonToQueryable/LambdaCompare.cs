@@ -13,6 +13,7 @@ namespace JsonToQueryable
         GreaterThan = 3,
         GreaterThanOrEqual = 4,
         Equal = 5,
-        NotEqual = 6
+        NotEqual = 6,
+        Contains = 7
     }
 }

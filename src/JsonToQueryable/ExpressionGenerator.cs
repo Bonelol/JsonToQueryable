@@ -28,6 +28,14 @@ namespace JsonToQueryable
             return mInfo;
         }
 
+        private static MethodInfo CreateStringContainMethod()
+        {
+            var qInfo = typeof(string);
+            var mInfos = qInfo.GetMethods().Where(m => m.Name == "Contains");
+            var mInfo = mInfos.First();
+            return mInfo;
+        }
+
         private static MethodInfo CreateGenericSelectMethod(Type type)
         {
             var qInfo = typeof(Queryable);
@@ -57,7 +65,7 @@ namespace JsonToQueryable
             return q;
         }
 
-        private IQueryable<T> CreateQueryInclude<T>(IQueryable<T> queryable, ExpressionNode expressionNode, bool hasIncludeFilter)
+        private static IQueryable<T> CreateQueryInclude<T>(IQueryable<T> queryable, ExpressionNode expressionNode, bool hasIncludeFilter)
         {
             if (expressionNode.Properties.Count == 0)
                 return queryable;
@@ -73,7 +81,7 @@ namespace JsonToQueryable
             return temp;
         }
 
-        private IQueryable<T> CreateQueryWhere<T>(IQueryable<T> queryable, ExpressionNode node)
+        private static IQueryable<T> CreateQueryWhere<T>(IQueryable<T> queryable, ExpressionNode node)
         {
             var predict = node.CreatePredictExpression();
 
@@ -248,11 +256,6 @@ namespace JsonToQueryable
                     operation = _parser.Next();
                 }
 
-                if (operation.Kind == TokenKind.NAME)
-                {
-                    operation = _parser.Next();
-                }
-
                 switch (operation.Kind)
                 {
                     case TokenKind.LESSTHAN:
@@ -308,8 +311,23 @@ namespace JsonToQueryable
                         temp = CreateLambdaExpression(parameter, property.Value, v, LambdaCompare.Equal);
                     }
                         break;
+                    case TokenKind.NAME:
+                    {
+                        var operationName = operation.Value.ToLower();
+                        switch (operationName)
+                        {
+                            case "contains":
+                                operation = _parser.Next();
+                                var v = operation.Value;
+                                temp = CreateLambdaExpression(parameter, property.Value, v, LambdaCompare.Contains);
+                                break;
+                            default:
+                                throw new NotSupportedException(operation.Value);
+                        }
+                        break;
+                    }
                     default:
-                        throw new NotImplementedException();
+                        throw new NotSupportedException(operation.Value);
                 }
 
                 if (oo != null)
@@ -349,6 +367,8 @@ namespace JsonToQueryable
                     return Expression.Equal(Expression.Property(parameter, property), Expression.Constant(value));
                 case LambdaCompare.NotEqual:
                     return Expression.NotEqual(Expression.Property(parameter, property), Expression.Constant(value));
+                case LambdaCompare.Contains:
+                    return Expression.Call(Expression.Property(parameter, property), CreateStringContainMethod(), Expression.Constant(value));
                 case LambdaCompare.Unknown:
                 default:
                     throw new ArgumentOutOfRangeException(nameof(compare), compare, null);
