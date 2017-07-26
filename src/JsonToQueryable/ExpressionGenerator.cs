@@ -6,17 +6,18 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Query.Internal;
 using JsonToQueryable.Extensions;
+using Newtonsoft.Json.Linq;
 
 namespace JsonToQueryable
 {
     public class ExpressionGenerator
     {
-        private readonly Parser _parser;
+        private readonly JObject _jObject;
         private readonly Type _rootType;
 
         public ExpressionGenerator(string query, Type rootType)
         {
-            _parser = Parser.Parse(new Source(query));
+            _jObject = JObject.Parse(query);
             _rootType = rootType;
         }
 
@@ -49,8 +50,8 @@ namespace JsonToQueryable
             var hasIncludeFilter = context.GetService<IQueryCompiler>().GetType().Name == "ReplaceQueryCompiler";
             var obj = ParseJsonString();
             var set = context.Set<T>();
-            var q = CreateQueryWhere(set, obj.Root);
-            q = CreateQueryInclude(q, obj.Root, hasIncludeFilter);
+            var q = CreateQueryInclude(set, obj.Root, hasIncludeFilter);
+            q = CreateQueryWhere(q, obj.Root);
 
             if (obj.PageSize > 0)
             {
@@ -65,7 +66,7 @@ namespace JsonToQueryable
             return q;
         }
 
-        private static IQueryable<T> CreateQueryInclude<T>(IQueryable<T> queryable, ExpressionNode expressionNode, bool hasIncludeFilter)
+        private IQueryable<T> CreateQueryInclude<T>(IQueryable<T> queryable, ExpressionNode expressionNode, bool hasIncludeFilter)
         {
             if (expressionNode.Properties.Count == 0)
                 return queryable;
@@ -74,22 +75,22 @@ namespace JsonToQueryable
 
             foreach (var node in expressionNode.Properties.Values.Where(p => p.IsReferencedType))
             {
-                var exp = node.CreateIncludeExpression(temp, hasIncludeFilter);
+                var exp = node.CreateIncludeExpression2(temp.Expression, hasIncludeFilter);
                 temp = queryable.Provider.CreateQuery<T>(exp);
             }
 
             return temp;
         }
 
-        private static IQueryable<T> CreateQueryWhere<T>(IQueryable<T> queryable, ExpressionNode node)
+        private IQueryable<T> CreateQueryWhere<T>(IQueryable<T> queryable, ExpressionNode node)
         {
-            var predict = node.CreatePredictExpression();
+            var predict = node.CreateWherePredictExpression();
 
             if (predict == null)
                 return queryable;
 
             var wInfo = CreateGenericWhereMethod(node.Type);
-            var lambda = Expression.Lambda(node.PredictExpression, false, node.ParameterExpression);
+            var lambda = Expression.Lambda(node.WherePredictExpression, false, node.ParameterExpression);
             var exp = Expression.Call(null, wInfo, new[] { queryable.Expression, Expression.Quote(lambda) });
 
             return queryable.Provider.CreateQuery<T>(exp);
@@ -99,150 +100,90 @@ namespace JsonToQueryable
         {
             var obj = new QueryableObject();
 
-            while (true)
+            foreach (var property in this._jObject.Properties())
             {
-                var oper = _parser.Next();
-
-                if (oper.Kind == TokenKind.BRACE_L)
+                var name = property.Name.ToLower();
+                switch (name)
                 {
-
-                }
-                else if (oper.Kind == TokenKind.NAME)
-                {
-                    var name = oper.Value.ToLower();
-
-                    switch (name)
+                    case "query":
                     {
-                        case "query":
-                        {
-                            var colon = _parser.Next();
-                            if (colon.Kind == TokenKind.COLON)
-                            {
-                                obj.Root = ParseNode(_rootType);
-                            }
-                            break;
-                        }
-                        case "page":
-                        {
-                            var colon = _parser.Next();
-                            if (colon.Kind == TokenKind.COLON)
-                            {
-                                var page = _parser.Next();
-                                if (page.Kind == TokenKind.INT)
-                                {
-                                    obj.Page = page.Value.ToInt32();
-                                }
-                                else
-                                {
-                                    throw new Exception("Missing page value");
-                                }
-                            }
-                            else
-                            {
-                                throw new Exception("Missing page value");
-                            }
-                            break;
-                        }
-                        case "pagesize":
-                        {
-                            var colon = _parser.Next();
-                            if (colon.Kind == TokenKind.COLON)
-                            {
-                                var pageSize = _parser.Next();
-                                if (pageSize.Kind == TokenKind.INT)
-                                {
-                                    obj.PageSize = pageSize.Value.ToInt32();
-                                }
-                                else
-                                {
-                                    throw new Exception("Missing pageSize value");
-                                }
-                            }
-                            else
-                            {
-                                throw new Exception("Missing pageSize value");
-                            }
-                            break;
-                        }
-                        default:
-                            throw new NotSupportedException();
+                        //TODO
+                        obj.Root = ParseNode((JObject)property.Value, this._rootType);
+                        break;
                     }
-                }
-                else if (oper.Kind == TokenKind.BRACE_R || oper.Kind == TokenKind.EOF)
-                {
-                    break;
+                    case "page":
+                    {
+                        if (property.Value.Type == JTokenType.Integer)
+                        {
+                            obj.Page = property.Value.ToObject<int>();
+                        }
+                        else
+                        {
+                            throw new Exception("Invalid page value");
+                        }
+                        break;
+                    }
+                    case "pagesize":
+                    {
+                        if (property.Value.Type == JTokenType.Integer)
+                        {
+                            obj.PageSize = property.Value.ToObject<int>();
+                        }
+                        else
+                        {
+                            throw new Exception("Invalid pageSize value");
+                        }
+                        break;
+                    }
+                    default:
+                        throw new NotSupportedException();
                 }
             }
 
             return obj;
         }
 
-        private ExpressionNode ParseNode(Type type, string name = null, ExpressionNode parent = null)
+        private ExpressionNode ParseNode(JObject jObject, Type type, string name = null, ExpressionNode parent = null)
         {
             var node = new ExpressionNode(type, name, parent);
 
-            while (true)
+
+            foreach (var property in jObject.Properties())
             {
-                var oper = _parser.Next();
+                ExpressionNode childNode;
 
-                if (oper.Kind == TokenKind.BRACE_L)
+                var propertyType = node.Type.GetProperty(property.Name).PropertyType;
+                if (property.Value.Type == JTokenType.Object)
                 {
-
+                    childNode = ParseNode((JObject)property.Value, propertyType, property.Name, node);
                 }
-                else if (oper.Kind == TokenKind.NAME)
+                else
                 {
-                    ExpressionNode childNode;
-                    var property = oper;
-                    var propertyType = node.Type.GetProperty(property.Value).PropertyType;
-
-                    var next = _parser.Next();
-
-                    if (next.Kind == TokenKind.COLON)
+                    var expression = ParseToLambdaExpression(node.ParameterExpression, property.Name, property.Value.ToString());
+                    childNode = new ExpressionNode(propertyType, property.Name, node)
                     {
-                        next = _parser.Next();
-                        _parser.Back();
-
-                        if (next.Kind == TokenKind.BRACE_L)
-                        {
-                            var t = propertyType;
-                            childNode = ParseNode(t, property.Value, node);
-                        }
-                        else
-                        {
-                            var expression = ParseToLambdaExpression(node.ParameterExpression, property);
-                            childNode = new ExpressionNode(propertyType, property.Value, node)
-                            {
-                                ComputedExpression = expression
-                            };
-                        }
-                    }
-                    else
-                    {
-                        childNode = new ExpressionNode(propertyType, property.Value, node);
-                        _parser.Back();
-                    }
-
-                    node.Properties.Add(property.Value, childNode);
+                        ComputedExpression = expression
+                    };
                 }
-                else if (oper.Kind == TokenKind.BRACE_R || oper.Kind == TokenKind.EOF)
-                {
-                    break;
-                }
+
+                node.Properties.Add(property.Name, childNode);
             }
 
             return node;
         }
 
-        private Expression ParseToLambdaExpression(ParameterExpression parameter, Token property)
+        private Expression ParseToLambdaExpression(ParameterExpression parameter, string property, string queryString)
         {
             Expression expression = null;
+            var parse = Parser.Parse(new Source(queryString));
+
 
             while (true)
             {
                 Expression temp;
-                var operation = _parser.Next();
+                var operation = parse.Next();
 
-                if (operation.Kind == TokenKind.COMMA || operation.Kind == TokenKind.BRACE_L || operation.Kind == TokenKind.BRACE_R)
+                if (operation.Kind == TokenKind.EOF || operation.Kind == TokenKind.COMMA || operation.Kind == TokenKind.BRACE_L || operation.Kind == TokenKind.BRACE_R)
                 {
                     break;
                 }
@@ -253,7 +194,7 @@ namespace JsonToQueryable
                 if (operation.Kind == TokenKind.AND || operation.Kind == TokenKind.OR)
                 {
                     oo = operation.Kind;
-                    operation = _parser.Next();
+                    operation = parse.Next();
                 }
 
                 switch (operation.Kind)
@@ -261,54 +202,54 @@ namespace JsonToQueryable
                     case TokenKind.LESSTHAN:
                     {
                         var compare = LambdaCompare.LessThan;
-                        var n = _parser.Next();
+                        var n = parse.Next();
                         if (n.Kind == TokenKind.EQUALS)
                         {
-                            n = _parser.Next();
+                            n = parse.Next();
                             compare = LambdaCompare.LessThanOrEqual;
                         }
 
                         var v = n.Value.ToInt32();
-                        temp = CreateLambdaExpression(parameter, property.Value, v, compare);
+                        temp = CreateLambdaExpression(parameter, property, v, compare);
                     }
                         break;
                     case TokenKind.GREATERTHAN:
                     {
                         var compare = LambdaCompare.GreaterThan;
-                        var n = _parser.Next();
+                        var n = parse.Next();
                         if (n.Kind == TokenKind.EQUALS)
                         {
-                            n = _parser.Next();
+                            n = parse.Next();
                             compare = LambdaCompare.GreaterThanOrEqual;
                         }
 
                         var v = n.Value.ToInt32();
-                        temp = CreateLambdaExpression(parameter, property.Value, v, compare);
+                        temp = CreateLambdaExpression(parameter, property, v, compare);
                     }
                         break;
                     case TokenKind.EQUALS:
                     {
-                        var n = _parser.Next();
+                        var n = parse.Next();
                         var v = n.Value.ToInt32();
-                        temp = CreateLambdaExpression(parameter, property.Value, v, LambdaCompare.Equal);
+                        temp = CreateLambdaExpression(parameter, property, v, LambdaCompare.Equal);
                     }
                         break;
                     case TokenKind.INT:
                     {
                         var v = operation.Value.ToInt32();
-                        temp = CreateLambdaExpression(parameter, property.Value, v, LambdaCompare.Equal);
+                        temp = CreateLambdaExpression(parameter, property, v, LambdaCompare.Equal);
                     }
                         break;
                     case TokenKind.STRING:
                     {
                         var v = operation.Value;
-                        temp = CreateLambdaExpression(parameter, property.Value, v, LambdaCompare.Equal);
+                        temp = CreateLambdaExpression(parameter, property, v, LambdaCompare.Equal);
                     }
                         break;
                     case TokenKind.BOOLEAN:
                     {
                         var v = operation.Value.ToBoolean();
-                        temp = CreateLambdaExpression(parameter, property.Value, v, LambdaCompare.Equal);
+                        temp = CreateLambdaExpression(parameter, property, v, LambdaCompare.Equal);
                     }
                         break;
                     case TokenKind.NAME:
@@ -316,18 +257,33 @@ namespace JsonToQueryable
                         var operationName = operation.Value.ToLower();
                         switch (operationName)
                         {
-                            case "contains":
-                                operation = _parser.Next();
+                            case "$contains":
+                                operation = parse.Next();
                                 var v = operation.Value;
-                                temp = CreateLambdaExpression(parameter, property.Value, v, LambdaCompare.Contains);
+                                temp = CreateLambdaExpression(parameter, property, v, LambdaCompare.Contains);
                                 break;
                             default:
-                                throw new NotSupportedException(operation.Value);
+                                throw new NotSupportedException(operationName);
+                        }
+                        break;
+                    }
+                    case TokenKind.DOLLAR:
+                    {
+                        var operationName = parse.Next().Value.ToLower();
+                        switch (operationName)
+                        {
+                            case "contains":
+                                operation = parse.Next();
+                                var v = operation.Value;
+                                temp = CreateLambdaExpression(parameter, property, v, LambdaCompare.Contains);
+                                break;
+                            default:
+                                throw new NotSupportedException(operationName);
                         }
                         break;
                     }
                     default:
-                        throw new NotSupportedException(operation.Value);
+                        throw new NotImplementedException();
                 }
 
                 if (oo != null)

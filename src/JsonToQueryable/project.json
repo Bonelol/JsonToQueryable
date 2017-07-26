@@ -2,7 +2,8 @@
   "version": "1.0.0-*",
 
   "dependencies": {
-    "microsoft.entityframeworkcore": "1.0.3",
+    "Microsoft.EntityFrameworkCore": "1.0.0",
+    "newtonsoft.json": "10.0.3",
     "System.Runtime.Loader": "4.3.0"
   },
 
