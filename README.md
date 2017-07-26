@@ -25,3 +25,5 @@ dbContext.Parent.Include(p.Children)
                 .Skip(page * pageSize)
                 .Take(pageSize);
 ```
+
+Support Where, Include, ThenInclude, Take, Skip
