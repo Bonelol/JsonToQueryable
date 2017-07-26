@@ -11,24 +11,24 @@ namespace JsonToQueryable
 {
     public class ExpressionNode
     {
-        internal ExpressionNode Parent { get; set; }
+        internal ExpressionNode Parent { get; }
 
         internal ExpressionNode Root => this.Parent == null ? this : this.Parent.Root;
 
-        internal int Depth { get; set; }
+        internal int Depth { get; }
 
-        internal bool IsEnumerable { get; set; }
+        internal bool IsEnumerable { get; }
 
-        internal Dictionary<string, ExpressionNode> Properties { get; set; }
+        internal Dictionary<string, ExpressionNode> Properties { get; }
 
-        internal bool IsReferencedType { get; set; }
+        internal bool IsReferencedType { get; }
 
-        internal string NodeName { get; set; }
+        internal string NodeName { get; }
 
         internal Type Type { get; }
         internal ParameterExpression ParameterExpression { get; }
 
-        internal ExpressionNode(Type type, string name, ExpressionNode parent)
+        internal ExpressionNode(Type type, string name, ExpressionNode parent, Expression computedExpression = null)
         {
             var isEnumerable = typeof(IEnumerable).IsAssignableFrom(type) && type.GenericTypeArguments.Length > 0;
             var t = isEnumerable ? type.GenericTypeArguments[0] : type;
@@ -39,6 +39,7 @@ namespace JsonToQueryable
             ParameterExpression = Expression.Parameter(t, t.Name);
             NodeName = name;
             Parent = parent;
+            ComputedExpression = computedExpression;
 
             Depth = parent?.Depth + 1 ?? 0;
 
@@ -50,12 +51,12 @@ namespace JsonToQueryable
             }
         }
 
-        internal Expression ComputedExpression { get; set; }
+        internal Expression ComputedExpression { get; }
 
         /// <summary>
         /// For where clause
         /// </summary>
-        internal Expression WherePredictExpression { get; set; }
+        internal Expression WherePredictExpression { get; private set; }
 
         internal Expression CreateWherePredictExpression()
         {
@@ -80,7 +81,7 @@ namespace JsonToQueryable
         internal static MethodInfo CreateGenericAnyMethod(Type type)
         {
             var qInfo = typeof(Enumerable);
-            var mInfos = qInfo.GetMethods().Where(m => m.Name == "Any");
+            var mInfos = qInfo.GetMethods().Where(m => m.Name == ExpressionGenerator.ANY);
             var mInfo = mInfos.First(m => m.GetGenericArguments().Length == 1 && m.GetParameters().Length == 2).MakeGenericMethod(type);
             return mInfo;
         }
@@ -88,66 +89,12 @@ namespace JsonToQueryable
         internal static MethodInfo CreateGenericWhereMethod(Type type)
         {
             var qInfo = typeof(Enumerable);
-            var mInfos = qInfo.GetMethods().Where(m => m.Name == "Where");
+            var mInfos = qInfo.GetMethods().Where(m => m.Name == ExpressionGenerator.WHERE);
             var mInfo = mInfos.First(m => m.GetGenericArguments().Length == 1 && m.GetParameters().Length == 2).MakeGenericMethod(type);
             return mInfo;
         }
 
-        internal Expression CreateIncludeExpression(IQueryable queryable, bool hasncludeFilter)
-        {
-            var include = CreateGenericIncludeMethod(this.Parent, this);
-            var includePropertyExpr = (Expression) Expression.Property(this.Parent.ParameterExpression, this.NodeName);
-
-            if (hasncludeFilter && this.Properties.Count > 0)
-            {
-                var w = CreateGenericWhereMethod(this.Type);
-                var list = this.Properties.Values.Where(p => !p.IsReferencedType && p.ComputedExpression != null).Select(p => p.ComputedExpression).ToList();
-
-                if (list.Any())
-                {
-                    var whereExpr = list.Aggregate(Expression.AndAlso);
-                    var l = Expression.Lambda(whereExpr, false, this.ParameterExpression);
-                    var c = Expression.Property(this.Parent.ParameterExpression, this.NodeName);
-                    includePropertyExpr = Expression.Call(null, w, new Expression[] {c, l});
-
-                    include = CreateGenericIncludeWithFilterMethod(this.Parent, this);
-                }
-            }
-
-            var lambda = Expression.Lambda(includePropertyExpr, false, this.Parent.ParameterExpression);
-            var exp = Expression.Call(null, include, new[] {queryable.Expression, Expression.Quote(lambda)});
-
-            return exp;
-        }
-
-        internal MethodCallExpression CreateIncludeExpression1(Expression pExpression, bool hasncludeFilter)
-        {
-            var include = this.Depth > 1 ? CreateGenericThenIncludeMethod(this.Parent, this) : CreateGenericIncludeMethod(this.Parent, this);
-            var includePropertyExpr = (Expression) Expression.Property(this.Parent.ParameterExpression, this.NodeName);
-
-            if (hasncludeFilter && this.Properties.Count > 0)
-            {
-                var w = CreateGenericWhereMethod(this.Type);
-                var list = this.Properties.Values.Where(p => !p.IsReferencedType && p.ComputedExpression != null).Select(p => p.ComputedExpression).ToList();
-
-                if (list.Any())
-                {
-                    var whereExpr = list.Aggregate(Expression.AndAlso);
-                    var l = Expression.Lambda(whereExpr, false, this.ParameterExpression);
-                    var c = Expression.Property(this.Parent.ParameterExpression, this.NodeName);
-                    includePropertyExpr = Expression.Call(null, w, new Expression[] {c, l});
-
-                    include = this.Depth > 1 ? CreateGenericThenIncludeWithFilterMethod(this.Parent, this) : CreateGenericIncludeWithFilterMethod(this.Parent, this);
-                }
-            }
-
-            var lambda = Expression.Lambda(includePropertyExpr, false, this.Parent.ParameterExpression);
-            var exp = Expression.Call(null, include, new[] {pExpression, Expression.Quote(lambda)});
-
-            return this.Properties.Values.Where(v => v.IsReferencedType).Aggregate(exp, (expression, node) => node.CreateIncludeExpression1(expression, hasncludeFilter));
-        }
-
-        internal Expression CreateIncludeExpression2(Expression pExpression, bool hasncludeFilter)
+        internal Expression CreateIncludeExpression(Expression pExpression, bool hasncludeFilter)
         {
             //if this is the end of node chain
             if (!this.Properties.Values.Any(p => p.IsReferencedType))
@@ -158,10 +105,10 @@ namespace JsonToQueryable
                 var lambda = Expression.Lambda(includePropertyExpr, false, this.Parent.ParameterExpression);
                 var exp = Expression.Call(null, include, new[] {pExpression, Expression.Quote(lambda)});
 
-                return this.Properties.Values.Where(v => v.IsReferencedType).Aggregate(exp, (expression, node) => node.CreateIncludeExpression1(expression, hasncludeFilter));
+                return this.Properties.Values.Where(v => v.IsReferencedType).Aggregate(exp, (expression, node) => (MethodCallExpression)node.CreateIncludeExpression(expression, hasncludeFilter));
             }
 
-            Expression result = pExpression;
+            var result = pExpression;
 
             foreach (var node in this.Properties.Values.Where(p => p.IsReferencedType))
             {
@@ -171,7 +118,7 @@ namespace JsonToQueryable
                 var lambda = Expression.Lambda(includePropertyExpr, false, this.Parent.ParameterExpression);
                 var exp = Expression.Call(null, include, new[] {result, Expression.Quote(lambda)});
 
-                result = node.CreateIncludeExpression2(exp, hasncludeFilter);
+                result = node.CreateIncludeExpression(exp, hasncludeFilter);
             }
 
             return result;
@@ -181,7 +128,7 @@ namespace JsonToQueryable
         {
             var propertyType = node.IsEnumerable ? typeof(ICollection<>).MakeGenericType(node.Type) : node.Type;
             var mInfo = typeof(EntityFrameworkQueryableExtensions).GetMethods()
-                .Where(m => m.Name == "Include")
+                .Where(m => m.Name == ExpressionGenerator.INCLUDE)
                 .First(m => m.GetGenericArguments().Length == 2)
                 .MakeGenericMethod(parent.Type, propertyType);
             return mInfo;
@@ -190,9 +137,9 @@ namespace JsonToQueryable
         internal static MethodInfo CreateGenericThenIncludeMethod(ExpressionNode parent, ExpressionNode node)
         {
             var propertyType = node.IsEnumerable ? typeof(ICollection<>).MakeGenericType(node.Type) : node.Type;
-            var previousPropertyType = node.IsEnumerable ? typeof(ICollection<>).MakeGenericType(node.Type) : node.Type;
+            //var previousPropertyType = node.IsEnumerable ? typeof(ICollection<>).MakeGenericType(node.Type) : node.Type;
             var mInfo = typeof(EntityFrameworkQueryableExtensions).GetMethods()
-                .Where(m => m.Name == "ThenInclude").ElementAt(parent.IsEnumerable ? 0 : 1)
+                .Where(m => m.Name == ExpressionGenerator.THEN_INCLUDE).ElementAt(parent.IsEnumerable ? 0 : 1)
                 .MakeGenericMethod(parent.Root.Type, parent.Type, propertyType);
             return mInfo;
         }
@@ -201,7 +148,7 @@ namespace JsonToQueryable
         {
             var propertyType = node.IsEnumerable ? typeof(IEnumerable<>).MakeGenericType(node.Type) : node.Type;
             var mInfo = Type.GetType("EntityFrameworkCore.IncludeFilter.QueryableExtensions,EntityFrameworkCore.IncludeFilter").GetMethods()
-                .Where(m => m.Name == "IncludeWithFilter")
+                .Where(m => m.Name == ExpressionGenerator.INCLUDE_WITH_FILTER)
                 .First(m => m.GetGenericArguments().Length == 2)
                 .MakeGenericMethod(parent.Type, propertyType);
             return mInfo;
@@ -211,7 +158,7 @@ namespace JsonToQueryable
         {
             var propertyType = node.IsEnumerable ? typeof(IEnumerable<>).MakeGenericType(node.Type) : node.Type;
             var mInfo = Type.GetType("EntityFrameworkCore.IncludeFilter.QueryableExtensions,EntityFrameworkCore.IncludeFilter").GetMethods()
-                .Where(m => m.Name == "ThenIncludeWithFilter")
+                .Where(m => m.Name == ExpressionGenerator.THEN_INCLUDE_WITH_FILTER)
                 .First(m => m.GetGenericArguments().Length == 2)
                 .MakeGenericMethod(parent.Type, propertyType);
             return mInfo;

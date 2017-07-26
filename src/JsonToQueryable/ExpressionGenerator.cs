@@ -12,6 +12,15 @@ namespace JsonToQueryable
 {
     public class ExpressionGenerator
     {
+        internal const string ANY = "Any";
+        internal const string WHERE = "Where";
+        internal const string SELECT = "Select";
+        internal const string CONTAINS = "Contains";
+        internal const string INCLUDE = "Include";
+        internal const string THEN_INCLUDE = "ThenInclude";
+        internal const string INCLUDE_WITH_FILTER = "IncludeWithFilter";
+        internal const string THEN_INCLUDE_WITH_FILTER = "ThenIncludeWithFilter";
+
         private readonly JObject _jObject;
         private readonly Type _rootType;
 
@@ -24,7 +33,7 @@ namespace JsonToQueryable
         private static MethodInfo CreateGenericWhereMethod(Type type)
         {
             var qInfo = typeof(Queryable);
-            var mInfos = qInfo.GetMethods().Where(m => m.Name == "Where");
+            var mInfos = qInfo.GetMethods().Where(m => m.Name == WHERE);
             var mInfo = mInfos.First(m => m.GetGenericArguments().Length == 1).MakeGenericMethod(type);
             return mInfo;
         }
@@ -32,7 +41,7 @@ namespace JsonToQueryable
         private static MethodInfo CreateStringContainMethod()
         {
             var qInfo = typeof(string);
-            var mInfos = qInfo.GetMethods().Where(m => m.Name == "Contains");
+            var mInfos = qInfo.GetMethods().Where(m => m.Name == CONTAINS);
             var mInfo = mInfos.First();
             return mInfo;
         }
@@ -40,7 +49,7 @@ namespace JsonToQueryable
         private static MethodInfo CreateGenericSelectMethod(Type type)
         {
             var qInfo = typeof(Queryable);
-            var mInfos = qInfo.GetMethods().Where(m => m.Name == "Select");
+            var mInfos = qInfo.GetMethods().Where(m => m.Name == SELECT);
             var mInfo = mInfos.First(m => m.GetGenericArguments().Length == 2).MakeGenericMethod(type, type);
             return mInfo;
         }
@@ -75,7 +84,7 @@ namespace JsonToQueryable
 
             foreach (var node in expressionNode.Properties.Values.Where(p => p.IsReferencedType))
             {
-                var exp = node.CreateIncludeExpression2(temp.Expression, hasIncludeFilter);
+                var exp = node.CreateIncludeExpression(temp.Expression, hasIncludeFilter);
                 temp = queryable.Provider.CreateQuery<T>(exp);
             }
 
@@ -160,10 +169,7 @@ namespace JsonToQueryable
                 else
                 {
                     var expression = ParseToLambdaExpression(node.ParameterExpression, property.Name, property.Value.ToString());
-                    childNode = new ExpressionNode(propertyType, property.Name, node)
-                    {
-                        ComputedExpression = expression
-                    };
+                    childNode = new ExpressionNode(propertyType, property.Name, node, expression);
                 }
 
                 node.Properties.Add(property.Name, childNode);
