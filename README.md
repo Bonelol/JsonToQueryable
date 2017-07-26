@@ -6,12 +6,12 @@ For example:
 ```js
 {
     query: {
-        Name: contains 'Default',
+        Name: "contains 'Default'",
         Children: {
-            Id: >100,
+            Id: ">100",
             Active: true,                    
         },               
-        AnotherEntity
+        AnotherEntity: {}
     },
     page:2,//starts on 0
     pageSize:25
