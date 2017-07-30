@@ -75,7 +75,7 @@ namespace JsonToQueryable
             return q;
         }
 
-        private IQueryable<T> CreateQueryInclude<T>(IQueryable<T> queryable, ExpressionNode expressionNode, bool hasIncludeFilter)
+        private static IQueryable<T> CreateQueryInclude<T>(IQueryable<T> queryable, ExpressionNode expressionNode, bool hasIncludeFilter)
         {
             if (expressionNode.Properties.Count == 0)
                 return queryable;
@@ -91,7 +91,7 @@ namespace JsonToQueryable
             return temp;
         }
 
-        private IQueryable<T> CreateQueryWhere<T>(IQueryable<T> queryable, ExpressionNode node)
+        private static IQueryable<T> CreateQueryWhere<T>(IQueryable<T> queryable, ExpressionNode node)
         {
             var predict = node.CreateWherePredictExpression();
 
