@@ -3,11 +3,21 @@
   <PropertyGroup>
     <TargetFramework>netcoreapp2.1</TargetFramework>
     <AssemblyName>JsonToQueryable</AssemblyName>
-    <PackageId>JsonToQueryable</PackageId>
+    <PackageId>JsonQ</PackageId>
     <GenerateAssemblyConfigurationAttribute>false</GenerateAssemblyConfigurationAttribute>
     <GenerateAssemblyCompanyAttribute>false</GenerateAssemblyCompanyAttribute>
     <GenerateAssemblyProductAttribute>false</GenerateAssemblyProductAttribute>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <Authors>MaxMeng</Authors>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Remove="ExpressionGenerator.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Remove="project.json" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="2.1.0" />
