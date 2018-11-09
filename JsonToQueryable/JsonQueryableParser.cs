@@ -265,22 +265,25 @@ namespace JsonToQueryable
 
         private static Expression CreateLambdaExpression(ParameterExpression parameter, string property, object value, LambdaCompare compare)
         {
+            var propertyExpression = Expression.Convert(Expression.Property(parameter, property), value.GetType());
+            var valueExpression = Expression.Constant(value);
+
             switch (compare)
             {
                 case LambdaCompare.LessThan:
-                    return Expression.LessThan(Expression.Property(parameter, property), Expression.Constant(value));
+                    return Expression.LessThan(propertyExpression, valueExpression);
                 case LambdaCompare.LessThanOrEqual:
-                    return Expression.LessThanOrEqual(Expression.Property(parameter, property), Expression.Constant(value));
+                    return Expression.LessThanOrEqual(propertyExpression, valueExpression);
                 case LambdaCompare.GreaterThan:
-                    return Expression.GreaterThan(Expression.Property(parameter, property), Expression.Constant(value));
+                    return Expression.GreaterThan(propertyExpression, valueExpression);
                 case LambdaCompare.GreaterThanOrEqual:
-                    return Expression.GreaterThanOrEqual(Expression.Property(parameter, property), Expression.Constant(value));
+                    return Expression.GreaterThanOrEqual(propertyExpression, valueExpression);
                 case LambdaCompare.Equal:
-                    return Expression.Equal(Expression.Property(parameter, property), Expression.Constant(value));
+                    return Expression.Equal(propertyExpression, valueExpression);
                 case LambdaCompare.NotEqual:
-                    return Expression.NotEqual(Expression.Property(parameter, property), Expression.Constant(value));
+                    return Expression.NotEqual(propertyExpression, valueExpression);
                 case LambdaCompare.Contains:
-                    return Expression.Call(Expression.Property(parameter, property), MethodCreator.CreateStringContainMethod(), Expression.Constant(value));
+                    return Expression.Call(propertyExpression, MethodCreator.CreateStringContainMethod(), valueExpression);
                 case LambdaCompare.Unknown:
                 default:
                     throw new ArgumentOutOfRangeException(nameof(compare), compare, null);
