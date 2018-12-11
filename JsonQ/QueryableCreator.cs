@@ -4,7 +4,7 @@ using System.Linq.Expressions;
 using System.Reflection;
 using Microsoft.EntityFrameworkCore;
 
-namespace JsonToQueryable
+namespace JsonQ
 {
     public class QueryableCreator
     {

@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace JsonToQueryable.Extensions
+namespace JsonQ.Extensions
 {
     internal static class StringExtensions
     {

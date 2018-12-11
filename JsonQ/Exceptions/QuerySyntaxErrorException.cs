@@ -1,4 +1,4 @@
-﻿namespace JsonToQueryable.Exceptions
+﻿namespace JsonQ.Exceptions
 {
     using System;
     using System.Linq;

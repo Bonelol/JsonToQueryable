@@ -4,7 +4,7 @@ using System.Linq;
 using Microsoft.EntityFrameworkCore;
 using Newtonsoft.Json.Linq;
 
-namespace JsonToQueryable.Extensions
+namespace JsonQ.Extensions
 {
     public static class DbContextExtensions
     {

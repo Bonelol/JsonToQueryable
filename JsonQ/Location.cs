@@ -1,4 +1,4 @@
-﻿namespace JsonToQueryable
+﻿namespace JsonQ
 {
     using System.Text.RegularExpressions;
 

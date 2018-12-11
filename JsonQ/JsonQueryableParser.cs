@@ -3,10 +3,10 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
-using JsonToQueryable.Extensions;
+using JsonQ.Extensions;
 using Newtonsoft.Json.Linq;
 
-namespace JsonToQueryable
+namespace JsonQ
 {
     public class JsonQueryableParser
     {
@@ -165,8 +165,15 @@ namespace JsonToQueryable
                             compare = LambdaCompare.LessThanOrEqual;
                         }
 
-                        var v = n.Value.ToInt32();
-                        temp = CreateLambdaExpression(parameter, property, v, compare);
+                        if (n.Kind == TokenKind.STRING && DateTime.TryParse(n.Value, out var dateTime))
+                        {
+                            temp = CreateLambdaExpression(parameter, property, dateTime, compare);
+                        }
+                        else
+                        {
+                            var v = n.Value.ToInt32();
+                            temp = CreateLambdaExpression(parameter, property, v, compare);
+                        }
                     }
                         break;
                     case TokenKind.GREATERTHAN:
@@ -179,17 +186,44 @@ namespace JsonToQueryable
                             compare = LambdaCompare.GreaterThanOrEqual;
                         }
 
-                        var v = n.Value.ToInt32();
-                        temp = CreateLambdaExpression(parameter, property, v, compare);
-                    }
+                        if (n.Kind == TokenKind.STRING && DateTime.TryParse(n.Value, out var dateTime))
+                        {
+                            temp = CreateLambdaExpression(parameter, property, dateTime, compare);
+                        }
+                        else
+                        {
+                            var v = n.Value.ToInt32();
+                            temp = CreateLambdaExpression(parameter, property, v, compare);
+                        }
+
                         break;
+                    }
                     case TokenKind.EQUALS:
                     {
                         var n = parse.Next();
-                        var v = n.Value.ToInt32();
-                        temp = CreateLambdaExpression(parameter, property, v, LambdaCompare.Equal);
-                    }
+
+                        switch (n.Kind)
+                        {
+                            case TokenKind.STRING:
+                            {
+                                temp = DateTime.TryParse(n.Value, out var dateTime)
+                                    ? CreateLambdaExpression(parameter, property, dateTime, LambdaCompare.Equal)
+                                    : CreateLambdaExpression(parameter, property, n.Value, LambdaCompare.Equal);
+
+                                break;
+                            }
+                            case TokenKind.INT:
+                            {
+                                var v = n.Value.ToInt32();
+                                temp = CreateLambdaExpression(parameter, property, v, LambdaCompare.Equal);
+                                break;
+                            }
+                            default:
+                                throw new IndexOutOfRangeException();
+                        }
+
                         break;
+                    }
                     case TokenKind.INT:
                     {
                         var v = operation.Value.ToInt32();

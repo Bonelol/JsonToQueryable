@@ -1,4 +1,4 @@
-﻿namespace JsonToQueryable
+﻿namespace JsonQ
 {
     public interface ILexer
     {

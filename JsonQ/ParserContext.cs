@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace JsonToQueryable
+namespace JsonQ
 {
     public class ParserContext : IDisposable
     {
@@ -41,10 +41,7 @@ namespace JsonToQueryable
 
         public Token Back()
         {
-            if(_currentToken?.Previous == null)
-                throw new Exception("_currentToken.PreviousToken == null");
-
-            this._currentToken = _currentToken.Previous;
+            this._currentToken = _currentToken?.Previous ?? throw new Exception("_currentToken.PreviousToken == null");
             return _currentToken;
         }
 

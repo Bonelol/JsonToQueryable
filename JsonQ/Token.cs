@@ -1,4 +1,4 @@
-﻿namespace JsonToQueryable
+﻿namespace JsonQ
 {
     public enum TokenKind
     {
@@ -27,6 +27,7 @@
         OR = 23,
         NOT = 24,
         BOOLEAN = 25,
+        SINGLUE_QUOTE = 26,
     }
 
     public class Token
