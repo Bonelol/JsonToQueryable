@@ -5,25 +5,34 @@ Parse JSON string to expressions that used for querying in EntityFramework.Core
 For example:
 ```js
 {
-    query: {
-        Name: "contains 'Default'",
-        Children: {
-            Id: ">100",
-            Active: true,                    
-        },               
-        AnotherEntity: {}
-    },
-    page:2,//starts on 0
-    pageSize:25
+	"query": {
+		"Name": "$contains 'Default'"
+	},
+	"include": {
+		"Children": {
+			"query": {
+				"Year": "= 2020"
+			}
+		},
+		"AnotherChildren": {}
+	},
+	"type": "ParentType",
+	"page": 1,
+	"pageSize": 25
 }
 ```
 will be convert to
 ```csharp
-dbContext.Parent.Include(p.Children)
-                .Include(p.AnotherEntity)
-                .Where(p=>p.Name.Contains("Default") && p.Children.Any(c=>c.Id > 100 && c.Active))
+dbContext.Parent.Include(p.Children.Where(c => c.Year == 2020))
+                .Include(p.AnotherChildren)
+                .Where(p=>p.Name.Contains("Default"))
                 .Skip(page * pageSize)
                 .Take(pageSize);
 ```
 
 Support Where, Include, ThenInclude, Take, Skip
+
+```csharp
+var query = Context.CreateQuery(queryString, new List<Type>() { typeof(Parent) }).Cast<Parent>();
+return query.ToList();
+```
