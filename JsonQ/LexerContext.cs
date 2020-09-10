@@ -10,8 +10,8 @@
 
         public LexerContext(ISource source, int index)
         {
-            this._currentIndex = index;
-            this._source = source;
+            _currentIndex = index;
+            _source = source;
         }
 
         public void Dispose()
@@ -20,35 +20,35 @@
 
         public Token GetToken()
         {
-            if (this._source.Body == null)
-                return this.CreateEOFToken();
+            if (_source.Body == null)
+                return CreateEOFToken();
 
-            this._currentIndex = this.GetPositionAfterWhitespace(this._source.Body, this._currentIndex);
+            _currentIndex = GetPositionAfterWhitespace(_source.Body, _currentIndex);
 
-            if (this._currentIndex >= this._source.Body.Length)
-                return this.CreateEOFToken();
+            if (_currentIndex >= _source.Body.Length)
+                return CreateEOFToken();
 
-            var unicode = this.IfUnicodeGetString();
+            var unicode = IfUnicodeGetString();
 
-            var code = this._source.Body[this._currentIndex];
+            var code = _source.Body[_currentIndex];
 
-            this.ValidateCharacterCode(code);
+            ValidateCharacterCode(code);
 
-            var token = this.CheckForPunctuationTokens(code);
+            var token = CheckForPunctuationTokens(code);
             if (token != null)
                 return token;
 
             if (char.IsLetter(code) || code == '_')
-                return this.ReadNameOrBoolean();
+                return ReadNameOrBoolean();
 
             if (char.IsNumber(code) || code == '-')
-                return this.ReadNumber();
+                return ReadNumber();
 
             if (code == '"' || code == '\'')
-                return this.ReadString();
+                return ReadString();
 
             throw new QuerySyntaxErrorException(
-                $"Unexpected character {this.ResolveCharName(code, unicode)}", this._source, this._currentIndex);
+                $"Unexpected character {ResolveCharName(code, unicode)}", _source, _currentIndex);
         }
 
         public bool OnlyHexInString(string test)
@@ -59,55 +59,53 @@
         public Token ReadNumber()
         {
             var isFloat = false;
-            var start = this._currentIndex;
-            var code = this._source.Body[start];
+            var start = _currentIndex;
+            var code = _source.Body[start];
 
             if (code == '-')
-                code = this.NextCode();
+                code = NextCode();
 
             var nextCode = code == '0'
-                ? this.NextCode()
-                : this.ReadDigitsFromOwnSource(code);
+                ? NextCode()
+                : ReadDigitsFromOwnSource(code);
 
             if (nextCode >= 48 && nextCode <= 57)
             {
                 throw new QuerySyntaxErrorException(
-                    $"Invalid number, unexpected digit after {code}: \"{nextCode}\"", this._source, this._currentIndex);
+                    $"Invalid number, unexpected digit after {code}: \"{nextCode}\"", _source, _currentIndex);
             }
 
             code = nextCode;
             if (code == '.')
             {
                 isFloat = true;
-                code = this.ReadDigitsFromOwnSource(this.NextCode());
+                code = ReadDigitsFromOwnSource(NextCode());
             }
 
             if (code == 'E' || code == 'e')
             {
                 isFloat = true;
-                code = this.NextCode();
+                code = NextCode();
                 if (code == '+' || code == '-')
                 {
-                    code = this.NextCode();
+                    NextCode();
                 }
-
-                code = this.ReadDigitsFromOwnSource(code);
             }
 
-            return isFloat ? this.CreateFloatToken(start) : this.CreateIntToken(start);
+            return isFloat ? CreateFloatToken(start) : CreateIntToken(start);
         }
 
         public Token ReadString()
         {
-            var start = this._currentIndex;
-            var value = this.ProcessStringChunks();
+            var start = _currentIndex;
+            var value = ProcessStringChunks();
 
             return new Token()
             {
                 Kind = TokenKind.STRING,
                 Value = value,
                 Start = start,
-                End = this._currentIndex + 1
+                End = _currentIndex + 1
             };
         }
 
@@ -118,7 +116,7 @@
 
         private string AppendCharactersFromLastChunk(string value, int chunkStart)
         {
-            return value + this._source.Body.Substring(chunkStart, this._currentIndex - chunkStart - 1);
+            return value + _source.Body.Substring(chunkStart, _currentIndex - chunkStart - 1);
         }
 
         private string AppendToValueByCode(string value, char code)
@@ -133,9 +131,9 @@
                 case 'n': value += '\n'; break;
                 case 'r': value += '\r'; break;
                 case 't': value += '\t'; break;
-                case 'u': value += this.GetUnicodeChar(); break;
+                case 'u': value += GetUnicodeChar(); break;
                 default:
-                    throw new QuerySyntaxErrorException($"Invalid character escape sequence: \\{code}.", this._source, this._currentIndex);
+                    throw new QuerySyntaxErrorException($"Invalid character escape sequence: \\{code}.", _source, _currentIndex);
             }
 
             return value;
@@ -151,7 +149,7 @@
             if (code < 0x0020 && code != 0x0009)
             {
                 throw new QuerySyntaxErrorException(
-                    $"Invalid character within String: \\u{((int)code).ToString("D4")}.", this._source, this._currentIndex);
+                    $"Invalid character within String: \\u{((int)code):D4}.", _source, _currentIndex);
             }
         }
 
@@ -182,29 +180,29 @@
 
         private Token CheckForAnd()
         {
-            return CheckFor('&', 1, TokenKind.AND) ?? this.CreatePunctuationToken(TokenKind.AND, 1);
+            return CheckFor('&', 1, TokenKind.AND) ?? CreatePunctuationToken(TokenKind.AND, 1);
         }
 
         private Token CheckForOr()
         {
-            return CheckFor('|', 1, TokenKind.OR) ?? this.CreatePunctuationToken(TokenKind.PIPE, 1);
+            return CheckFor('|', 1, TokenKind.OR) ?? CreatePunctuationToken(TokenKind.PIPE, 1);
         }
 
         private Token CheckForNot()
         {
-            return CheckFor('=', 1, TokenKind.NOT) ?? this.CreatePunctuationToken(TokenKind.BANG, 1);
+            return CheckFor('=', 1, TokenKind.NOT) ?? CreatePunctuationToken(TokenKind.BANG, 1);
         }
 
         private Token CheckForEquals()
         {
-            return CheckFor('=', 1, TokenKind.EQUALS) ?? this.CreatePunctuationToken(TokenKind.EQUALS, 1);
+            return CheckFor('=', 1, TokenKind.EQUALS) ?? CreatePunctuationToken(TokenKind.EQUALS, 1);
         }
 
         private Token CheckFor(char c, int length, TokenKind kind)
         {
-            for (int i = 1; i <= length; i++)
+            for (var i = 1; i <= length; i++)
             {
-                var cc = this._source.Body.Length > this._currentIndex + i ? this._source.Body[this._currentIndex + i] : 0;
+                var cc = _source.Body.Length > _currentIndex + i ? _source.Body[_currentIndex + i] : 0;
 
                 if (cc != c)
                 {
@@ -212,7 +210,7 @@
                 }
             }
 
-            return this.CreatePunctuationToken(kind, length + 1);
+            return CreatePunctuationToken(kind, length + 1);
         }
 
         private Token CheckForSpreadOperator()
@@ -224,7 +222,7 @@
         {
             if (code != '"' && code != '\'')
             {
-                throw new QuerySyntaxErrorException("Unterminated string.", this._source, this._currentIndex);
+                throw new QuerySyntaxErrorException("Unterminated string.", _source, _currentIndex);
             }
         }
 
@@ -232,8 +230,8 @@
         {
             return new Token()
             {
-                Start = this._currentIndex,
-                End = this._currentIndex,
+                Start = _currentIndex,
+                End = _currentIndex,
                 Kind = TokenKind.EOF
             };
         }
@@ -244,8 +242,8 @@
             {
                 Kind = TokenKind.FLOAT,
                 Start = start,
-                End = this._currentIndex,
-                Value = this._source.Body.Substring(start, this._currentIndex - start)
+                End = _currentIndex,
+                Value = _source.Body.Substring(start, _currentIndex - start)
             };
         }
 
@@ -255,20 +253,20 @@
             {
                 Kind = TokenKind.INT,
                 Start = start,
-                End = this._currentIndex,
-                Value = this._source.Body.Substring(start, this._currentIndex - start)
+                End = _currentIndex,
+                Value = _source.Body.Substring(start, _currentIndex - start)
             };
         }
 
         private Token CreateNameOrBooleanToken(int start)
         {
-            var value = this._source.Body.Substring(start, this._currentIndex - start);
+            var value = _source.Body.Substring(start, _currentIndex - start);
             var isBoolean = value.Equals("true", StringComparison.OrdinalIgnoreCase) || value.Equals("false", StringComparison.OrdinalIgnoreCase);
 
             return new Token()
             {
                 Start = start,
-                End = this._currentIndex,
+                End = _currentIndex,
                 Kind = isBoolean ? TokenKind.BOOLEAN : TokenKind.NAME,
                 Value = value
             };
@@ -278,8 +276,8 @@
         {
             return new Token()
             {
-                Start = this._currentIndex,
-                End = this._currentIndex + offset,
+                Start = _currentIndex,
+                End = _currentIndex + offset,
                 Kind = kind,
                 Value = null
             };
@@ -287,8 +285,8 @@
 
         private char GetCode()
         {
-            return this.IsNotAtTheEndOfQuery()
-                ? this._source.Body[this._currentIndex]
+            return IsNotAtTheEndOfQuery()
+                ? _source.Body[_currentIndex]
                 : (char)0;
         }
 
@@ -311,7 +309,7 @@
                         break;
 
                     case '#':
-                        position = this.WaitForEndOfComment(body, position, code);
+                        position = WaitForEndOfComment(body, position, code);
                         break;
 
                     default:
@@ -324,73 +322,73 @@
 
         private char GetUnicodeChar()
         {
-            var expression = this._source.Body.Substring(this._currentIndex, 5);
+            var expression = _source.Body.Substring(_currentIndex, 5);
 
-            if (!this.OnlyHexInString(expression.Substring(1)))
+            if (!OnlyHexInString(expression.Substring(1)))
             {
-                throw new QuerySyntaxErrorException($"Invalid character escape sequence: \\{expression}.", this._source, this._currentIndex);
+                throw new QuerySyntaxErrorException($"Invalid character escape sequence: \\{expression}.", _source, _currentIndex);
             }
 
             var character = (char)(
-                this.CharToHex(this.NextCode()) << 12 |
-                this.CharToHex(this.NextCode()) << 8 |
-                this.CharToHex(this.NextCode()) << 4 |
-                this.CharToHex(this.NextCode()));
+                CharToHex(NextCode()) << 12 |
+                CharToHex(NextCode()) << 8 |
+                CharToHex(NextCode()) << 4 |
+                CharToHex(NextCode()));
 
             return character;
         }
 
         private string IfUnicodeGetString()
         {
-            return this._source.Body.Length > this._currentIndex + 5 &&
-                this.OnlyHexInString(this._source.Body.Substring(this._currentIndex + 2, 4))
-                ? this._source.Body.Substring(this._currentIndex, 6)
+            return _source.Body.Length > _currentIndex + 5 &&
+                OnlyHexInString(_source.Body.Substring(_currentIndex + 2, 4))
+                ? _source.Body.Substring(_currentIndex, 6)
                 : null;
         }
 
         private bool IsNotAtTheEndOfQuery()
         {
-            return this._currentIndex < this._source.Body.Length;
+            return _currentIndex < _source.Body.Length;
         }
 
         private char NextCode()
         {
-            this._currentIndex++;
-            return this.IsNotAtTheEndOfQuery()
-                ? this._source.Body[this._currentIndex]
+            _currentIndex++;
+            return IsNotAtTheEndOfQuery()
+                ? _source.Body[_currentIndex]
                 : (char)0;
         }
 
         private char ProcessCharacter(ref string value, ref int chunkStart)
         {
-            var code = this.GetCode();
-            ++this._currentIndex;
+            var code = GetCode();
+            ++_currentIndex;
 
             if (code == '\\')
             {
-                value = this.AppendToValueByCode(this.AppendCharactersFromLastChunk(value, chunkStart), this.GetCode());
+                value = AppendToValueByCode(AppendCharactersFromLastChunk(value, chunkStart), GetCode());
 
-                ++this._currentIndex;
-                chunkStart = this._currentIndex;
+                ++_currentIndex;
+                chunkStart = _currentIndex;
             }
 
-            return this.GetCode();
+            return GetCode();
         }
 
         private string ProcessStringChunks()
         {
-            var chunkStart = ++this._currentIndex;
-            var code = this.GetCode();
+            var chunkStart = ++_currentIndex;
+            var code = GetCode();
             var value = string.Empty;
 
-            while (this.IsNotAtTheEndOfQuery() && code != 0x000A && code != 0x000D && code != '"' && code != '\'')
+            while (IsNotAtTheEndOfQuery() && code != 0x000A && code != 0x000D && code != '"' && code != '\'')
             {
-                this.CheckForInvalidCharacters(code);
-                code = this.ProcessCharacter(ref value, ref chunkStart);
+                CheckForInvalidCharacters(code);
+                code = ProcessCharacter(ref value, ref chunkStart);
             }
 
-            this.CheckStringTermination(code);
-            value += this._source.Body.Substring(chunkStart, this._currentIndex - chunkStart);
+            CheckStringTermination(code);
+            value += _source.Body.Substring(chunkStart, _currentIndex - chunkStart);
             return value;
         }
 
@@ -403,7 +401,7 @@
             if (!char.IsNumber(code))
             {
                 throw new QuerySyntaxErrorException(
-                    $"Invalid number, expected digit but got: {this.ResolveCharName(code)}", this._source, this._currentIndex);
+                    $"Invalid number, expected digit but got: {ResolveCharName(code)}", _source, _currentIndex);
             }
 
             do
@@ -419,24 +417,24 @@
 
         private char ReadDigitsFromOwnSource(char code)
         {
-            this._currentIndex = this.ReadDigits(this._source, this._currentIndex, code);
-            code = this.GetCode();
+            _currentIndex = ReadDigits(_source, _currentIndex, code);
+            code = GetCode();
             return code;
         }
 
         private Token ReadNameOrBoolean()
         {
-            var start = this._currentIndex;
+            var start = _currentIndex;
             var code = (char)0;
 
             do
             {
-                this._currentIndex++;
-                code = this.GetCode();
+                _currentIndex++;
+                code = GetCode();
             }
-            while (this.IsNotAtTheEndOfQuery() && IsValidNameCharacter(code));
+            while (IsNotAtTheEndOfQuery() && IsValidNameCharacter(code));
 
-            return this.CreateNameOrBooleanToken(start);
+            return CreateNameOrBooleanToken(start);
         }
 
         private string ResolveCharName(char code, string unicodeString = null)
@@ -455,7 +453,7 @@
             if (code < 0x0020 && code != 0x0009 && code != 0x000A && code != 0x000D)
             {
                 throw new QuerySyntaxErrorException(
-                    $"Invalid character \"\\u{code.ToString("D4")}\".", this._source, this._currentIndex);
+                    $"Invalid character \"\\u{code:D4}\".", _source, _currentIndex);
             }
         }
 

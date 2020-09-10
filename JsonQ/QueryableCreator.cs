@@ -12,16 +12,16 @@ namespace JsonQ
         public int Page { get; set; } = 0;
         public int PageSize { get; set; } = 0;
 
-        private static readonly MethodInfo _createQueryMethodInfo = typeof(QueryableCreator).GetMethod("CreateQuery", new [] {typeof(DbContext)});
+        private static readonly MethodInfo CreateQueryMethodInfo = typeof(QueryableCreator).GetMethod("CreateQuery", new [] {typeof(DbContext)});
 
         public IQueryable CreateQuery(DbContext context, Type type = null)
         {
-            return _createQueryMethodInfo.MakeGenericMethod(type ?? this.Root.Type).Invoke(this, new object[]{ context }) as IQueryable;
+            return CreateQueryMethodInfo.MakeGenericMethod(type ?? this.Root.Type).Invoke(this, new object[]{ context }) as IQueryable;
         }
 
         public IQueryable<T> CreateQuery<T>(DbContext context) where T : class
         {
-            const bool hasIncludeFilter = false;//context.GetService<IQueryCompiler>().GetType().Name == "ReplaceQueryCompiler";
+            const bool hasIncludeFilter = true;
 
             var set = context.Set<T>();
             var q = CreateQueryInclude(set, Root, hasIncludeFilter);
@@ -42,12 +42,12 @@ namespace JsonQ
 
         private static IQueryable<T> CreateQueryInclude<T>(IQueryable<T> queryable, ExpressionNode expressionNode, bool hasIncludeFilter)
         {
-            if (expressionNode.Properties.Count == 0)
+            if (expressionNode.Include == null || expressionNode.Include.Count == 0)
                 return queryable;
 
             var temp = queryable;
 
-            foreach (var node in expressionNode.Properties.Values.Where(p => p.ShouldInclude))
+            foreach (var node in expressionNode.Include)
             {
                 var exp = node.CreateIncludeExpression(temp.Expression, hasIncludeFilter);
                 temp = queryable.Provider.CreateQuery<T>(exp);

@@ -40,7 +40,7 @@ namespace JsonQ
                 {
                     case "type":
                     {
-                        rootType = _includedTypes.First(t=> t.FullName != null && t.FullName.ToLower().Contains(property.Value.ToObject<string>().ToLower()));
+                        rootType = _includedTypes.First(t=> t.FullName != null && t.FullName.ToLower().Contains(property.Value.ToObject<string>()?.ToLower() ?? ""));
                         break;
                     }
                     case "query":
@@ -72,6 +72,8 @@ namespace JsonQ
                         }
                         break;
                     }
+                    case "include":
+                        break;
                     default:
                         throw new NotSupportedException();
                 }
@@ -89,9 +91,44 @@ namespace JsonQ
 
             obj.Root = ParseNode((JObject)rootJProperty.Value, rootType, rootJProperty.Name, false, true);
 
+            var include = _jObject.Property("include");
+
+            if (include != null)
+            {
+                obj.Root.Include = ParseIncludeNodes(include.Value as JObject, rootType, obj.Root);
+            }
+
             this.QueryableObject = obj;
 
             return obj;
+        }
+
+        private IList<ExpressionNode> ParseIncludeNodes(JObject jObject, Type parentType, ExpressionNode parent)
+        {
+            var properties = jObject.Properties();
+            var list = new List<ExpressionNode>();
+
+            foreach (var property in properties)
+            {
+                var obj = (JObject) property.Value;
+                var query = obj.Property("query");
+                var include = obj.Property("include");
+                var type = parentType.GetProperty(property.Name)?.PropertyType;
+                var isEnumerable = typeof(IEnumerable).IsAssignableFrom(type) && type?.GenericTypeArguments.Length > 0;
+                var childeType = isEnumerable ? type.GenericTypeArguments[0] : type;
+                var node = query == null
+                    ? new ExpressionNode(childeType, property.Name, true, isEnumerable, parent)
+                    : ParseNode(query.Value as JObject, childeType, property.Name, true, isEnumerable, parent);
+
+                if (include != null)
+                {
+                    node.Include = ParseIncludeNodes(include.Value as JObject, type, node);
+                }
+
+                list.Add(node);
+            }
+
+            return list;
         }
 
         private ExpressionNode ParseNode(JObject jObject, Type type, string name, bool isEnumerable, bool include, ExpressionNode parent = null)
@@ -102,9 +139,9 @@ namespace JsonQ
             {
                 ExpressionNode childNode;
 
-                var propertyType = node.Type.GetProperty(property.Name).PropertyType;
+                var propertyType = node.Type.GetProperty(property.Name)?.PropertyType;
                 //check is enumerable
-                var childNodeisEnumerable = typeof(IEnumerable).IsAssignableFrom(propertyType) && propertyType.GenericTypeArguments.Length > 0;
+                var childNodeisEnumerable = typeof(IEnumerable).IsAssignableFrom(propertyType) && propertyType?.GenericTypeArguments.Length > 0;
                 //base type
                 var childeType = childNodeisEnumerable ? propertyType.GenericTypeArguments[0] : propertyType;
 
@@ -299,7 +336,8 @@ namespace JsonQ
 
         private static Expression CreateLambdaExpression(ParameterExpression parameter, string property, object value, LambdaCompare compare)
         {
-            var propertyExpression = Expression.Convert(Expression.Property(parameter, property), value.GetType());
+            //var propertyExpression = Expression.Convert(Expression.Property(parameter, property), value.GetType());
+            var propertyExpression = Expression.Property(parameter, property);
             var valueExpression = Expression.Constant(value);
 
             switch (compare)

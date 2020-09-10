@@ -8,16 +8,17 @@ namespace JsonQ
 {
     public class ExpressionNode
     {
-        internal ExpressionNode Parent { get; }
-        internal ExpressionNode Root => this.Parent == null ? this : this.Parent.Root;
         internal int Depth { get; }
         internal string NodeName { get; }
         internal bool IsEnumerable { get; }
-        internal Dictionary<string, ExpressionNode> Properties { get; }
         internal bool ShouldInclude { get; }
         internal Type Type { get; }
+        internal ExpressionNode Parent { get; }
+        internal ExpressionNode Root => Parent == null ? this : Parent.Root;
         internal ParameterExpression ParameterExpression { get; }
         internal Expression ComputedExpression { get; }
+        internal Dictionary<string, ExpressionNode> Properties { get; }
+        internal IList<ExpressionNode> Include { get; set; }
         /// <summary>
         /// For where clause
         /// </summary>
@@ -39,7 +40,7 @@ namespace JsonQ
         internal Expression CreateWherePredictExpression()
         {
             //create where for object's properties first
-            foreach (var subNode in this.Properties.Values)
+            foreach (var subNode in Properties.Values)
             {
                 if (subNode.ShouldInclude)
                 {
@@ -52,28 +53,22 @@ namespace JsonQ
                 }
             }
 
-            var predicts = this.Properties.Values.Where(p => p.WherePredictExpression != null).Select(p => p.WherePredictExpression).ToList();
-            return predicts.Any() ? this.WherePredictExpression = predicts.Aggregate(Expression.AndAlso) : null;
-        }
-
-        internal Expression CreateIncludeFilterPredictExpression()
-        {
-            var predicts = this.Properties.Values.Where(n => !n.ShouldInclude && n.ComputedExpression != null).Select(n => n.ComputedExpression).ToList();
-            return predicts.Any() ? this.WherePredictExpression = predicts.Aggregate(Expression.AndAlso) : null;
+            var predicts = Properties.Values.Where(p => p.WherePredictExpression != null).Select(p => p.WherePredictExpression).ToList();
+            return predicts.Any() ? WherePredictExpression = predicts.Aggregate(Expression.AndAlso) : null;
         }
 
         internal Expression CreateIncludeExpression(Expression pExpression, bool hasncludeFilter)
         {
             //if this is the end of node chain
-            if (!this.Properties.Values.Any(p => p.ShouldInclude))
+            if (Include == null || Include.Count == 0)
             {
                 var exp = CreateIncludeMethodCallExpression(pExpression, hasncludeFilter);
-                return this.Properties.Values.Where(v => v.ShouldInclude).Aggregate(exp, (expression, node) => (MethodCallExpression)node.CreateIncludeExpression(expression, hasncludeFilter));
+                return Properties.Values.Where(v => v.ShouldInclude).Aggregate(exp, (expression, node) => (MethodCallExpression)node.CreateIncludeExpression(expression, hasncludeFilter));
             }
 
             var result = pExpression;
 
-            foreach (var node in this.Properties.Values.Where(p => p.ShouldInclude))
+            foreach (var node in Properties.Values.Where(p => p.ShouldInclude))
             {
                 var exp = CreateIncludeMethodCallExpression(pExpression, hasncludeFilter);
                 result = node.CreateIncludeExpression(exp, hasncludeFilter);
@@ -86,40 +81,37 @@ namespace JsonQ
         {
             MethodInfo include;
             Expression includePropertyExpr;
-            var list = this.Properties.Values.Where(p => !p.ShouldInclude && p.ComputedExpression != null).Select(p => p.ComputedExpression).ToList();
+            var list = Properties.Values.Where(p => !p.ShouldInclude && p.ComputedExpression != null).Select(p => p.ComputedExpression).ToList();
 
             if (hasncludeFilter && list.Any())
             {
-                var w = MethodCreator.CreateGenericEnumerableWhereMethod(this.Type);
+                var w = MethodCreator.CreateGenericEnumerableWhereMethod(Type);
                 var whereExpr = list.Aggregate(Expression.AndAlso);
-                var l = Expression.Lambda(whereExpr, false, this.ParameterExpression);
-                var c = Expression.Property(this.Parent.ParameterExpression, this.NodeName);
+                var l = Expression.Lambda(whereExpr, false, ParameterExpression);
+                var c = Expression.Property(Parent.ParameterExpression, NodeName); 
                 includePropertyExpr = Expression.Call(null, w, new Expression[] { c, l });
-
-                var icollection = typeof(ICollection<>).MakeGenericType(this.Type);
-                includePropertyExpr = Expression.Convert(includePropertyExpr, icollection);
-                include = this.Depth > 1 ? MethodCreator.CreateGenericThenIncludeWithFilterMethod(this.Parent, this) : MethodCreator.CreateGenericIncludeWithFilterMethod(this.Parent, this);
+                include = Depth > 1 ? MethodCreator.CreateGenericThenIncludeMethod(Parent, this, typeof(IEnumerable<>)) : MethodCreator.CreateGenericIncludeMethod(Parent, this, typeof(IEnumerable<>));
             }
             else
             {
-                includePropertyExpr = Expression.Property(this.Parent.ParameterExpression, this.NodeName);
-                include = this.Depth > 1 ? MethodCreator.CreateGenericThenIncludeMethod(this.Parent, this) : MethodCreator.CreateGenericIncludeMethod(this.Parent, this);
+                includePropertyExpr = Expression.Property(Parent.ParameterExpression, NodeName);
+                include = Depth > 1 ? MethodCreator.CreateGenericThenIncludeMethod(Parent, this, typeof(ICollection<>)) : MethodCreator.CreateGenericIncludeMethod(Parent, this, typeof(ICollection<>));
             }
 
-            var lambda = Expression.Lambda(includePropertyExpr, false, this.Parent.ParameterExpression);
+            var lambda = Expression.Lambda(includePropertyExpr, false, Parent.ParameterExpression);
             var exp = Expression.Call(null, include, new[] { pExpression, Expression.Quote(lambda) });
             return exp;
         }
 
         private Expression CreateAnyExpression()
         {
-            if (this.WherePredictExpression == null)
+            if (WherePredictExpression == null)
                 return null;
 
-            var wInfo = MethodCreator.CreateGenericAnyMethod(this.Type);
-            var lambda = Expression.Lambda(this.WherePredictExpression, false, this.ParameterExpression);
-            var c = Expression.Property(this.Parent.ParameterExpression, this.NodeName);
-            var exp = Expression.Call(null, wInfo, new Expression[] {c, lambda});
+            var wInfo = MethodCreator.CreateGenericAnyMethod(Type);
+            var lambda = Expression.Lambda(WherePredictExpression, false, ParameterExpression);
+            var c = Expression.Property(Parent.ParameterExpression, NodeName);
+            var exp = Expression.Call(null, wInfo, new Expression[] {c, Expression.Quote(lambda) });
 
             return exp;
         }

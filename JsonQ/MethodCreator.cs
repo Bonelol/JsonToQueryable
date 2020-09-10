@@ -17,9 +17,9 @@ namespace JsonQ
         internal const string INCLUDE_WITH_FILTER = "IncludeWithFilter";
         internal const string THEN_INCLUDE_WITH_FILTER = "ThenIncludeWithFilter";
 
-        internal static MethodInfo CreateGenericIncludeMethod(ExpressionNode parent, ExpressionNode node)
+        internal static MethodInfo CreateGenericIncludeMethod(ExpressionNode parent, ExpressionNode node, Type collectionType)
         {
-            var propertyType = node.IsEnumerable ? typeof(ICollection<>).MakeGenericType(node.Type) : node.Type;
+            var propertyType = node.IsEnumerable ? collectionType.MakeGenericType(node.Type) : node.Type;
             var mInfo = typeof(EntityFrameworkQueryableExtensions).GetMethods()
                 .Where(m => m.Name == INCLUDE)
                 .First(m => m.GetGenericArguments().Length == 2)
@@ -27,9 +27,9 @@ namespace JsonQ
             return mInfo;
         }
 
-        internal static MethodInfo CreateGenericThenIncludeMethod(ExpressionNode parent, ExpressionNode node)
+        internal static MethodInfo CreateGenericThenIncludeMethod(ExpressionNode parent, ExpressionNode node, Type collectionType)
         {
-            var propertyType = node.IsEnumerable ? typeof(ICollection<>).MakeGenericType(node.Type) : node.Type;
+            var propertyType = node.IsEnumerable ? collectionType.MakeGenericType(node.Type) : node.Type;
             var mInfo = typeof(EntityFrameworkQueryableExtensions).GetMethods()
                 .Where(m => m.Name == THEN_INCLUDE).ElementAt(parent.IsEnumerable ? 0 : 1)
                 .MakeGenericMethod(parent.Root.Type, parent.Type, propertyType);
