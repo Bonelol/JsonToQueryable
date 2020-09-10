@@ -1,6 +1,6 @@
 # JsonToQueryable
 
-Parse JSON string to expressions that used for querying in EntityFramework.Core
+Parse JSON string to expressions that used for querying in EntityFramework.Core 5.0
 
 For example:
 ```js
